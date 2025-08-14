@@ -2,18 +2,22 @@
 
 # NOTE: use "chmod +x run_docker.sh" to make this file executable
 
-set -e # Exit immediately if a command exits with a non zero status
-set -u # Treat unset variables as an error when substituting
+set -e  # Exit immediately if a command exits with a non-zero status
+set -u  # Treat unset variables as an error when substituting
 
-# Source the .env file to load environment variables
-if [ -f .env ]; then
-  source .env
+# Resolve script directory and load .env from there
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/.env" ]; then
+  source "$SCRIPT_DIR/.env"
+else
+  echo ".env file not found in $SCRIPT_DIR. Exiting..."
+  exit 1
 fi
 
-# Generate servers.json dynamically
-mkdir -p pgadmin
+# Generate servers.json dynamically for pgAdmin
+mkdir -p "$SCRIPT_DIR/pgadmin"
 
-cat > pgadmin/servers.json <<EOF
+cat > "$SCRIPT_DIR/pgadmin/servers.json" <<EOF
 {
   "Servers": {
     "1": {
@@ -22,7 +26,7 @@ cat > pgadmin/servers.json <<EOF
       "Host": "postgres",
       "Port": 5432,
       "MaintenanceDB": "postgres",
-      "Username": "$POSTGRES_USER",
+      "Username": "${POSTGRES_USER}",
       "SSLMode": "prefer"
     }
   }
@@ -43,19 +47,48 @@ docker-compose up --build -d
 echo "Waiting for containers to start up..."
 sleep 5
 
-# # Create databases
-echo "Creating databases..."
+# Ensure default database exists
+echo "Checking if database ${POSTGRES_DB} exists..."
+DB_EXISTS=$(docker exec -i postgres psql -U "${POSTGRES_USER}" -d postgres \
+  -tAc "SELECT 1 FROM pg_database WHERE datname='${POSTGRES_DB}';")
 
-# Loop over each SQL file in the sql directory
-for file in sql/*.sql; do
-    # Extract the name of the file without the extension
+if [ "$DB_EXISTS" != "1" ]; then
+  echo "Database ${POSTGRES_DB} does not exist. Creating..."
+  docker exec -i postgres createdb -U "${POSTGRES_USER}" "${POSTGRES_DB}"
+else
+  echo "Database ${POSTGRES_DB} already exists."
+fi
+
+# Enable pgvector extension in the default DB
+echo "Enabling pgvector extension in ${POSTGRES_DB}..."
+docker exec -i postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
+  -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
+# Create and initialize any extra DBs from sql/*.sql
+if [ -d "$SCRIPT_DIR/sql" ] && [ "$(ls -A "$SCRIPT_DIR"/sql/*.sql 2>/dev/null)" ]; then
+  echo "Creating databases from SQL files..."
+  for file in "$SCRIPT_DIR"/sql/*.sql; do
     db_name=$(basename "$file" .sql)
 
-    # Create the database with the extracted name
-    docker exec -i postgres createdb -U "$POSTGRES_USER" "$db_name"
+    # Create DB if missing
+    DB_EXISTS=$(docker exec -i postgres psql -U "${POSTGRES_USER}" -d postgres \
+      -tAc "SELECT 1 FROM pg_database WHERE datname='${db_name}';")
+    if [ "$DB_EXISTS" != "1" ]; then
+      echo "Creating database: $db_name"
+      docker exec -i postgres createdb -U "$POSTGRES_USER" "$db_name"
+    fi
 
-    # Load the SQL dump file into the new database
+    # Load schema/data
+    echo "Loading $file into $db_name..."
     docker exec -i postgres psql -U "$POSTGRES_USER" -d "$db_name" < "$file"
-done
 
-echo "Initialization complete!"
+    # Enable pgvector in the DB
+    echo "Enabling pgvector extension in $db_name..."
+    docker exec -i postgres psql -U "$POSTGRES_USER" -d "$db_name" \
+      -c "CREATE EXTENSION IF NOT EXISTS vector;"
+  done
+else
+  echo "No SQL files found in ./sql — skipping additional database creation."
+fi
+
+echo "Initialization complete! pgvector is ready in all databases."

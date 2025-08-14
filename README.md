@@ -1,45 +1,74 @@
-# Setting Up Pre-configured PostgreSQL Database with pgAdmin4 in Docker
+# Setting Up Pre-configured PostgreSQL Database with pgAdmin4 and pgvector in Docker
 
-This project provides a `docker-compose` setup to easily spin up a PostgreSQL database along with an instance of pgAdmin4, which can be accessed from your web browser. The setup also supports auto-loading of predefined SQL dump files into the PostgreSQL database.
+## Prerequisites
+- **Docker** installed and running
+- **Docker Compose** installed
 
-## How to Run
+This project provides a `docker-compose` setup to easily spin up:
+- A **PostgreSQL** database with the `pgvector` extension pre-installed.
+- An instance of **pgAdmin4** for database management via a web browser.
+- Auto-loading of predefined `.sql` files into PostgreSQL.
+- Automatic creation of the `pgvector` extension in all databases.
 
-### 1. Define Custom Dump Files
+---
 
-The `sql` directory contains dump files, which are SQL files that define various databases. Each file represents a different PostgreSQL database schema. The `run_docker.sh` script will:
+## 1. Project Structure
 
-- Create the corresponding database in PostgreSQL.
-- Run the SQL commands from each dump file against its respective database.
+├── docker-compose.yml # Service definitions for Postgres & pgAdmin
+├── run_docker.sh # Script to build, run, and seed the databases
+├── .env # Environment configuration
+├── pgadmin/servers.json # Auto-generated pgAdmin server configuration
+└── sql/ # Folder for .sql database dump/schema files
 
 
-### 2. Create the `.env` File 
+---
 
-To configure your environment, rename the `.env-example` file to `.env` and update the credentials (username, password) to your preferred values. This file will be used by the Docker containers and other scripts to configure access to the PostgreSQL database and pgAdmin4.
+## 2. Create the `.env` File
 
-### 3. Spin Up the Docker Compose Setup + Run/Seed Databases via `run_docker.sh`
+Create a `.env` file in the root of your project (same directory as `docker-compose.yml`):
 
-Follow these steps to launch the Docker containers and load your databases:
+```env
+# PostgreSQL Database (pgvector enabled)
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=password
+POSTGRES_DB=rag_db
+DB_PORT=5432
 
-1. Navigate to the directory containing the `run_docker.sh` file.
+# pgAdmin4
+PGADMIN_DEFAULT_EMAIL=abnish.kumar4@gmail.com
+PGADMIN_DEFAULT_PASSWORD=password@123
+PGADMIN_PORT=5555
+```
+- The .env file is automatically loaded by run_docker.sh and docker-compose.yml.
 
-    ```bash
-    cd /path/to/your/repo
-    ```
+3. Add SQL Dump Files (Optional)
 
-2. Ensure that the `run_docker.sh` file is executable. If it's not, make it executable with the following command:
+Place .sql files inside the sql/ folder.
 
-    ```bash
-    chmod +x run_docker.sh
-    ```
+Each file name (without .sql) will become the database name.
 
-3. Run the `run_docker.sh` script to start the Docker containers and load the dump files:
+Example:
 
-    ```bash
-    ./run_docker.sh
-    ```
+sql/
+  rag_db.sql   --> Creates database `rag_db` and loads this file
 
-The `run_docker.sh` script will do the following:
+If no .sql files are present, only the default database from .env (POSTGRES_DB) will be created.
 
-- Load the `.env` file to retrieve necessary environment variables.
-- Create PostgreSQL databases based on the SQL dump files in the `sql` directory.
-- Populate the created databases with the content from the corresponding `.sql` files (each database name matches the respective SQL file name).
+5. Access pgAdmin4
+
+Once the containers are running:
+
+Open your browser and go to:
+http://localhost:5555
+
+![alt text](image.png)
+
+Log in with:
+
+Email: PGADMIN_DEFAULT_EMAIL from .env
+
+Password: PGADMIN_DEFAULT_PASSWORD from .env
+
+You will see a server named "PostgreSQL" already configured and pointing to the container database.
+
+![alt text](image-1.png)
