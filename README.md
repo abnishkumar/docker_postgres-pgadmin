@@ -31,7 +31,7 @@ Create a `.env` file in the root of your project (same directory as `docker-comp
 # PostgreSQL Database (pgvector enabled)
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=password
-POSTGRES_DB=rag_db
+POSTGRES_DB=docu_mind_rag
 DB_PORT=5432
 
 # pgAdmin4
@@ -50,7 +50,7 @@ Each file name (without .sql) will become the database name.
 Example:
 
 sql/
-  rag_db.sql   --> Creates database `rag_db` and loads this file
+  docu_mind_rag.sql   --> Creates database `docu_mind_rag` and loads this file
 
 If no .sql files are present, only the default database from .env (POSTGRES_DB) will be created.
 
